@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>清单</title>
+<style>
+  :root {
+    --ink: #1c2b2d;
+    --paper: #f6f3ec;
+    --line: #d8d2c4;
+    --moss: #4a6659;
+    --moss-dark: #35493f;
+    --clay: #b5654a;
+    --done: #9a9689;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--paper);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px);
+    background-size: 100% 2.4em;
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+    padding: 48px 20px 80px;
+  }
+
+  .sheet {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  header {
+    margin-bottom: 28px;
+    border-bottom: 3px solid var(--ink);
+    padding-bottom: 14px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--moss);
+    font-weight: 600;
+  }
+
+  h1 {
+    margin: 4px 0 0;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .stat-line {
+    margin-top: 6px;
+    font-size: 14px;
+    color: #6b6558;
+  }
+
+  form {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    padding: 14px 16px;
+    font-size: 16px;
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink);
+  }
+
+  input[type="text"]:focus {
+    outline: 3px solid var(--clay);
+    outline-offset: 1px;
+  }
+
+  button.add {
+    padding: 14px 20px;
+    font-size: 16px;
+    font-weight: 700;
+    background: var(--moss-dark);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  button.add:active { transform: translateY(1px); }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .check {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    margin-top: 2px;
+    border: 2px solid var(--ink);
+    border-radius: 7px;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .check svg {
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+  }
+
+  li.done .check {
+    background: var(--moss-dark);
+    border-color: var(--moss-dark);
+  }
+
+  li.done .check svg { opacity: 1; }
+
+  .text {
+    flex: 1;
+    font-size: 17px;
+    line-height: 1.4;
+    padding-top: 2px;
+    word-break: break-word;
+  }
+
+  li.done .text {
+    color: var(--done);
+    text-decoration: line-through;
+    text-decoration-color: var(--done);
+  }
+
+  .del {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: #a89f8c;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+
+  .del:hover { color: var(--clay); }
+
+  .empty {
+    padding: 40px 4px;
+    text-align: center;
+    color: #8b8574;
+    font-size: 15px;
+  }
+
+  .empty .big {
+    font-size: 28px;
+    display: block;
+    margin-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="sheet">
+  <header>
+    <div class="eyebrow">今日清单</div>
+    <h1 id="dateTitle"></h1>
+    <div class="stat-line" id="statLine">还没有任务</div>
+  </header>
+
+  <form id="addForm">
+    <input type="text" id="taskInput" placeholder="添加一件要做的事…" autocomplete="off">
+    <button type="submit" class="add">添加</button>
+  </form>
+
+  <ul id="list"></ul>
+  <div class="empty" id="emptyState" style="display:none;">
+    <span class="big">🌿</span>
+    清单是空的,添加第一件事吧
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = "todo-items-v1";
+  let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+
+  const listEl = document.getElementById("list");
+  const emptyEl = document.getElementById("emptyState");
+  const statLine = document.getElementById("statLine");
+  const form = document.getElementById("addForm");
+  const input = document.getElementById("taskInput");
+
+  document.getElementById("dateTitle").textContent = new Date().toLocaleDateString("zh-CN", {
+    month: "long", day: "numeric", weekday: "long"
+  });
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }
+
+  function render() {
+    listEl.innerHTML = "";
+    emptyEl.style.display = items.length === 0 ? "block" : "none";
+
+    const doneCount = items.filter(i => i.done).length;
+    statLine.textContent = items.length === 0
+      ? "还没有任务"
+      : `${doneCount} / ${items.length} 已完成`;
+
+    items.forEach((item, i) => {
+      const li = document.createElement("li");
+      if (item.done) li.className = "done";
+
+      li.innerHTML = `
+        <button class="check" aria-label="完成">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+        <div class="text"></div>
+        <button class="del" aria-label="删除">×</button>
+      `;
+      li.querySelector(".text").textContent = item.text;
+
+      li.querySelector(".check").addEventListener("click", () => {
+        items[i].done = !items[i].done;
+        save();
+        render();
+      });
+      li.querySelector(".del").addEventListener("click", () => {
+        items.splice(i, 1);
+        save();
+        render();
+      });
+
+      listEl.appendChild(li);
+    });
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    items.push({ text, done: false });
+    input.value = "";
+    save();
+    render();
+  });
+
+  render();
+</script>
+
+</body>
+</html>
